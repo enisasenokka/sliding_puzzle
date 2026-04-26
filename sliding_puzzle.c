@@ -20,6 +20,7 @@ typedef struct {
 } AramaDugumu;
 
 int tahta[BOYUT][BOYUT];
+char son_ipucu = ' ';
 int hamle_sayisi;
 time_t oyun_baslangici;
 int hedefDurum[HUCRE_SAYISI] = {1, 2, 3, 4, 5, 6, 7, 8, 0};
@@ -48,18 +49,49 @@ void birdenIkiye(int kaynak[HUCRE_SAYISI], int hedef_dizi[BOYUT][BOYUT])
 
 void tahtayiYazdir()
 {
-    printf("\n  ---------\n");
+    #ifdef _WIN32
+        system("cls");
+    #else
+        system("clear");
+    #endif
+
+    printf("\n  \033[1;35m========= PUZZLE =========\033[0m\n\n");
+
     for (int i = 0; i < BOYUT; i++) {
-        printf("  |");
+        printf("  "); 
+
+    
+        // 1. Satır: Sayı ve Kutunun üst yarısı
+        
         for (int j = 0; j < BOYUT; j++) {
-            if (tahta[i][j] == 0)
-                printf(" _ ");  // bos hucreyi alt cizgi ile gosterilir
-            else
-                printf(" %d ", tahta[i][j]);
+            if (tahta[i][j] == 0) {
+                // Boş hücre: Daha küçük gri bir yuva
+                printf("\033[47m    \033[0m "); 
+            } else {
+                // Pembe blok: Sayı içinde
+                printf("\033[1;37;45m  %d \033[0m ", tahta[i][j]);
+            }
         }
-        printf("|\n");
+        printf("\n  "); // Alt satıra geç
+
+        // 2. Satır: Kutuların alt yarısı (boşluk bırakarak yüksekliği tamamlar)
+        for (int j = 0; j < BOYUT; j++) {
+            if (tahta[i][j] == 0) {
+                printf("     "); // Boş hücrenin altı tamamen boş
+            } else {
+                printf("\033[45m    \033[0m "); // Pembe bloğun alt dolgusu
+            }
+        }
+        printf("\n\n"); // Karolar arası dikey boşluk
     }
-    printf("  ---------\n");
+    printf("  \033[1;35m==========================\033[0m\n");
+
+
+    if (son_ipucu != ' ' && son_ipucu != '?') {
+        printf("\n  \033[1;33m[IPUCU]: Siradaki hamle -> %c\033[0m\n", son_ipucu);
+    } else if (son_ipucu == '?') {
+        printf("\n  \033[1;31m[IPUCU]: Cozum bulunamadi!\033[0m\n");
+    }
 }
 
 void bosHucreyiBul(int arama_tahtasi[BOYUT][BOYUT], int *satir, int *sutun)
@@ -116,7 +148,7 @@ int kazandiMi()
 }
 
 
-//Cozulebilirlik Kontolu::
+//Cozulebilirlik kontolu:
 //Sol taraftaki sayi, sag taraftaki sayidan buyukse buna "inversiyon" denir. inversiyon sayisi cifste cozulebilir
 int cozulebilirMi(int dizi[HUCRE_SAYISI])
 {
@@ -169,6 +201,7 @@ void ziyaretOlarakIsaretle(long long deger)
 char bfsIpucu()
 {
     char yonSecenekleri[4] = {'W', 'S', 'A', 'D'};
+
     //veriler temizlenir:
     memset(slot_dolu, 0, sizeof(slot_dolu)); 
     sira_basi = 0;
@@ -238,13 +271,16 @@ char bfsIpucu()
                 ziyaretOlarakIsaretle(durumNo);
 
                 memcpy(aramaSirasi[sira_sonu].dizi, yeniDizi, sizeof(yeniDizi));
-                aramaSirasi[sira_sonu].ebeveyn = simdikiIdx; /* kimin cocugu oldugunu kaydet */
+                aramaSirasi[sira_sonu].ebeveyn = simdikiIdx; 
                 aramaSirasi[sira_sonu].adim    = yonSecenekleri[y];
                 sira_sonu++;
             }
         }
+
     }
+
     return '?';
+
 }
 
 void karistir()
@@ -255,57 +291,78 @@ void karistir()
         hamleYap(yonler[rand() % 4], 1); 
 }
 
+int skorHesapla() {
+    int gecen_sure = (int)(time(NULL) - oyun_baslangici);
+    // Her saniye 1 puan,her hamle 5 puan düşürür. Başlangıç 1000.
+    int puan = 1000 - (gecen_sure * 1) - (hamle_sayisi * 5);
+    return (puan < 0) ? 0 : puan;
+}
+
 int main()
 {
-    //Tahtayi hedef durumda baslatir ve sonra karistirir
+    // Zorluk secimi
+    int zorluk;
+    printf("\n  Zorluk Secin (1: Kolay, 2: Orta, 3: Zor): ");
+    scanf("%d", &zorluk);
+
+    int karistirma_miktari = (zorluk == 1) ? 20 : (zorluk == 2) ? 100 : 250;
+
+    // Tahtayi hedef durumda başlat
     for (int i = 0; i < BOYUT; i++)
         for (int j = 0; j < BOYUT; j++)
             tahta[i][j] = hedefDurum[i * BOYUT + j];
-    karistir();
 
-
-    int dizi1B[HUCRE_SAYISI];
-    ikiDenBire(tahta, dizi1B);
-    if (!cozulebilirMi(dizi1B)) {
-        printf("  [HATA] Tahta cozulemez! Program durduruluyor.\n");
-        return 1;
+    // Secilen zorluga gore karistir
+    srand((unsigned int)time(NULL));
+    char yonler[4] = {'W', 'S', 'A', 'D'};
+    for (int i = 0; i < karistirma_miktari; i++) {
+        hamleYap(yonler[rand() % 4], 1); // 1: sessiz mod (hata mesaji basmaz)
     }
 
-    hamle_sayisi    = 0;
+    // Degiskenleri sifirla
+    hamle_sayisi = 0;
     oyun_baslangici = time(NULL);
 
-    printf("  === 3x3 Sliding Puzzle ===\n");
-    printf("  Hedef: 1 2 3 | 4 5 6 | 7 8 _\n");
-    printf("  W/S/A/D: hareket H:ipucu  Q: cikis\n");
+    printf("\n  === 3x3 Sliding Puzzle ===\n");
+    printf("  W/S/A/D: hareket | H: ipucu | Q: cikis\n");
 
     char komut;
 
+    // Ana oyun dongusu
     while (1) {
+        // 1. Ekranı ve Tahtayı Yazdır
         tahtayiYazdir();
-        printf("  Hamle: %d  |  Sure: %d sn\n",
-               hamle_sayisi, (int)(time(NULL) - oyun_baslangici));
+    
+        // 2. Skor ve Bilgileri Yazdır
+        int mevcut_puan = skorHesapla();
+        printf("\n  Hamle: %d  |  Sure: %d sn  |  SKOR: %d\n",
+               hamle_sayisi, (int)(time(NULL) - oyun_baslangici), mevcut_puan);
 
+        // 3. Kazanma Kontrolü
         if (kazandiMi()) {
-            printf("\n  Tebrikler! %d hamlede cozdunuz!\n\n", hamle_sayisi);
+            printf("\n  ************************************\n");
+            printf("  TEBRIKLER! Final Skoru: %d\n", mevcut_puan);
+            printf("  ************************************\n\n");
             break;
         }
 
+        // 4. Komut Al
         printf("  Komut: ");
         scanf(" %c", &komut);
 
-        if (komut == 'H' || komut == 'h') {
-            char ipucu = bfsIpucu();
-            printf("  Ipucu: %c\n", ipucu);
-            continue;
-        }           
+        // 5. Komutları İşle
+        if (komut == 'Q' || komut == 'q') break;
 
-        if (komut == 'Q' || komut == 'q') {
-            printf("  Cikis yapiliyor.\n");
-            break;
+        if (komut == 'H' || komut == 'h') {
+            son_ipucu = bfsIpucu(); // İpucunu belleğe al
+            continue; // Döngünün başına dön (tahtayı tekrar çizince ipucu görünecek)
         }
 
-        if (hamleYap(komut, 0))
+        // Eğer geçerli bir W/A/S/D hamlesi yapılırsa:
+        if (hamleYap(komut, 0)) {
             hamle_sayisi++;
+            son_ipucu = ' '; // Hareket edince eski ipucunu temizle
+        }
     }
 
     return 0;
